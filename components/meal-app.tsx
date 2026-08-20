@@ -2,9 +2,10 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import {
-  ArrowLeft, Check, ChevronRight, Clock3, History, LoaderCircle, LocateFixed,
-  LogOut, MapPin, Search, Sparkles, ThumbsDown, ThumbsUp, UserMinus,
-  UserPlus, Users, Utensils, X,
+  ArrowLeft, Check, ChevronRight, Clock3, Fish, Flame, Footprints, History,
+  LoaderCircle, LocateFixed, LogOut, MapPin, Pizza, Salad, Sandwich, Search,
+  Soup, Sparkles, ThumbsDown, ThumbsUp, UserMinus, UserPlus, Users, Utensils,
+  X, type LucideIcon,
 } from "lucide-react";
 
 import { shuffle } from "@/lib/candidates";
@@ -18,6 +19,34 @@ type AuthMode = "login" | "signup";
 type IdCheckStatus = "idle" | "checking" | "available" | "taken";
 type AppView = "decide" | "history";
 type DecisionStep = "participants" | "location" | "duel" | "result";
+
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  한식: Soup,
+  일식: Fish,
+  중식: Flame,
+  양식: Pizza,
+  분식: Sandwich,
+  아시아음식: Salad,
+};
+
+function categoryParts(category: string) {
+  const parts = category.split(">").map((part) => part.trim()).filter(Boolean);
+  const meaningful = parts.filter((part) => part !== "음식점");
+  return {
+    major: meaningful[0] || "음식점",
+    detail: meaningful.slice(1).join(" · ") || meaningful[0] || "음식점",
+  };
+}
+
+function CategoryBadge({ category }: { category: string }) {
+  const { major } = categoryParts(category);
+  const Icon = CATEGORY_ICONS[major] ?? Utensils;
+  return <span className="category-badge"><Icon size={21} aria-hidden /></span>;
+}
+
+function walkingMinutes(distanceMeters: number) {
+  return Math.max(1, Math.round(distanceMeters / 70));
+}
 
 async function requestApi<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -119,17 +148,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: AppUser) => v
       <section className="auth-intro">
         <div className="brand-lockup">
           <span className="brand-mark"><Utensils size={24} /></span>
-          <span>오늘 뭐 먹지?</span>
-        </div>
-        <div className="intro-copy">
-          <span className="eyebrow"><Sparkles size={15} /> 함께 고르는 한 끼</span>
-          <h1>고민은 짧게,<br />선택은 우리답게.</h1>
-          <p>함께 먹을 사람과 위치를 정하면 주변 식당을 골라드려요. 둘 중 하나만 고르다 보면 오늘의 메뉴가 결정됩니다.</p>
-        </div>
-        <div className="intro-steps" aria-label="서비스 진행 순서">
-          <span><Users size={18} /> 멤버 모으기</span><ChevronRight size={16} />
-          <span><MapPin size={18} /> 주변 찾기</span><ChevronRight size={16} />
-          <span><Check size={18} /> 하나 고르기</span>
+          <h1>오늘 뭐 먹지?</h1>
         </div>
       </section>
 
@@ -138,10 +157,6 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: AppUser) => v
           <div className="auth-tabs" role="tablist" aria-label="로그인 또는 가입">
             <button type="button" role="tab" aria-selected={mode === "login"} onClick={() => changeMode("login")}>로그인</button>
             <button type="button" role="tab" aria-selected={mode === "signup"} onClick={() => changeMode("signup")}>처음이에요</button>
-          </div>
-          <div className="auth-heading">
-            <h2>{mode === "login" ? "다시 만나 반가워요" : "같이 한 끼 시작해요"}</h2>
-            <p>{mode === "login" ? "ID와 PIN을 입력해 주세요." : "다음에도 알아볼 수 있게 계정을 만들어요."}</p>
           </div>
           <form onSubmit={submit} className="form-stack">
             <div className="field-group">
@@ -191,7 +206,6 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: AppUser) => v
             {error && <p className="message error" role="alert">{error}</p>}
             <button className="primary-button" disabled={busy}>{busy && <LoaderCircle className="spin" size={18} />}{mode === "login" ? "로그인" : "가입하고 시작하기"}</button>
           </form>
-          <p className="auth-note">PIN은 복구할 수 없으니 기억해 주세요.</p>
         </div>
       </section>
     </main>
@@ -235,6 +249,20 @@ function ParticipantNames({ participants }: { participants: ParticipantSummary[]
         <span key={participant.id}>{participant.displayName}<small>@{participant.loginId}</small></span>
       ))}
     </span>
+  );
+}
+
+function ParticipantBar({ participants }: { participants: ParticipantSummary[] }) {
+  return (
+    <div className="participant-bar">
+      <Users size={15} aria-hidden />
+      <span className="sr-only">오늘 함께 먹는 사람</span>
+      <div>
+        {participants.map((participant) => (
+          <span key={participant.id}>{participant.displayName}</span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -332,11 +360,18 @@ function LocationStep({ onBack, onSelect, busy, error }: { onBack: () => void; o
 }
 
 function PlaceCard({ place, onChoose, disabled }: { place: PlaceCandidate; onChoose: () => void; disabled: boolean }) {
-  const shortCategory = place.category.split(">").slice(1).map((part) => part.trim()).join(" · ") || "음식점";
+  const { major, detail } = categoryParts(place.category);
   return (
-    <button className="place-card" onClick={onChoose} disabled={disabled}>
-      <span className="place-illustration"><Utensils size={37} /></span>
-      <span className="place-copy"><small className="category">{shortCategory}</small><strong>{place.name}</strong><span><MapPin size={15} /> {place.distanceMeters.toLocaleString()}m · {place.roadAddress || place.address}</span></span>
+    <button className="place-card" data-slot="candidate" onClick={onChoose} disabled={disabled}>
+      <span className="place-card-heading">
+        <CategoryBadge category={place.category} />
+        <span className="place-copy"><small className="category">{major} · {detail}</small><strong>{place.name}</strong></span>
+      </span>
+      <span className="restaurant-meta">
+        <span><MapPin size={14} /> {place.distanceMeters.toLocaleString()}m</span>
+        <span><Footprints size={14} /> 도보 {walkingMinutes(place.distanceMeters)}분</span>
+      </span>
+      <span className="place-address">{place.roadAddress || place.address}</span>
       <span className="choose-label">이곳으로 선택</span>
     </button>
   );
@@ -346,8 +381,10 @@ function DuelStep({ state, onChoose, busy, error }: { state: DuelState; onChoose
   return (
     <section className="duel-section">
       <div className="duel-heading"><p className="eyebrow">ROUND {state.round} / {state.totalRounds}</p><h1>오늘은 어디가 더 끌리나요?</h1><p>고른 식당이 다음 후보와 계속 대결해요.</p></div>
-      <div className="round-bar"><span style={{ width: `${(state.round / state.totalRounds) * 100}%` }} /></div>
-      <div className="duel-grid"><PlaceCard place={state.winner} onChoose={() => onChoose(state.winner)} disabled={busy} /><span className="versus">VS</span><PlaceCard place={state.challenger} onChoose={() => onChoose(state.challenger)} disabled={busy} /></div>
+      <div className="round-bar" aria-hidden>
+        {Array.from({ length: state.totalRounds }, (_, index) => <span key={index} className={index < state.round ? "active" : ""} />)}
+      </div>
+      <div className="duel-grid"><PlaceCard place={state.winner} onChoose={() => onChoose(state.winner)} disabled={busy} /><span className="versus">또는</span><PlaceCard place={state.challenger} onChoose={() => onChoose(state.challenger)} disabled={busy} /></div>
       {busy && <p className="message neutral"><LoaderCircle className="spin" size={17} /> 결과를 저장하고 있어요…</p>}
       {error && <p className="message error" role="alert">{error}</p>}
     </section>
@@ -371,7 +408,7 @@ function FeedbackControls({ value, onChange, busy, includeNotVisited = true }: {
 }
 
 function ResultStep({ place, participants, locationLabel, decisionId, onRestart }: { place: PlaceCandidate; participants: ParticipantSummary[]; locationLabel: string; decisionId: number; onRestart: () => void }) {
-  const shortCategory = place.category.split(">").slice(1).map((part) => part.trim()).join(" · ") || "음식점";
+  const { detail: shortCategory } = categoryParts(place.category);
   const [feedback, setFeedback] = useState<PreferenceResponse | null>(null);
   const [feedbackBusy, setFeedbackBusy] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
@@ -388,7 +425,7 @@ function ResultStep({ place, participants, locationLabel, decisionId, onRestart 
 
   return (
     <section className="result-card">
-      <div className="confetti" aria-hidden="true">✦</div><span className="result-badge"><Check size={24} /></span><p className="eyebrow">오늘의 선택</p><h1>{place.name}</h1><p className="result-category">{shortCategory}</p>
+      <div className="confetti" aria-hidden="true">✦</div><p className="eyebrow">오늘의 선택</p><div className="result-title"><CategoryBadge category={place.category} /><div className="result-title-copy"><h1>{place.name}</h1><p className="result-category">{shortCategory}</p></div></div>
       <div className="result-meta"><span><MapPin size={17} /> {locationLabel}에서 {place.distanceMeters.toLocaleString()}m</span><span><Users size={17} /> <ParticipantNames participants={participants} /></span></div>
       <div className="result-feedback"><strong>직접 다녀온 뒤 어땠나요?</strong><p>내 평가는 내 추천에만 반영돼요.</p><FeedbackControls value={feedback} onChange={saveFeedback} busy={feedbackBusy} />{feedbackError && <p className="feedback-error" role="alert">{feedbackError}</p>}</div>
       {place.placeUrl && <a className="secondary-button" href={place.placeUrl} target="_blank" rel="noreferrer">카카오맵에서 보기 <ChevronRight size={17} /></a>}
@@ -479,7 +516,7 @@ function HistoryView() {
         : decisions.length === 0 ? <div className="empty-state"><span><History size={30} /></span><h2>아직 지난 선택이 없어요</h2><p>오늘의 첫 식당을 골라보세요.</p></div>
         : <div className="history-list">{decisions.map((decision) => (
           <article className="history-item" key={decision.id}>
-            <span className="history-icon"><Utensils size={23} /></span>
+            <span className="history-icon"><CategoryBadge category={decision.place.category} /></span>
             <div className="history-copy"><p><Clock3 size={15} /> {new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeStyle: "short" }).format(new Date(decision.decidedAt))}</p><h2>{decision.place.name}</h2><span>{decision.place.category.split(">").slice(1).map((part) => part.trim()).join(" · ")}</span></div>
             <div className="history-members"><Users size={17} /><ParticipantNames participants={decision.participants} /></div>
             <div className="history-feedback"><FeedbackControls value={decision.myFeedback ?? null} onChange={(response) => saveDecisionFeedback(decision.id, response)} busy={savingKey === `decision-${decision.id}`} /></div>
@@ -543,6 +580,7 @@ function DecisionFlow({ user }: { user: AppUser }) {
       {step === "participants" && <ParticipantsStep currentUser={user} participants={participants} setParticipants={setParticipants} onNext={() => { setError(""); setStep("location"); }} />}
       {step === "location" && <LocationStep onBack={() => setStep("participants")} onSelect={loadCandidates} busy={busy} error={error} />}
       {step === "duel" && duel && <DuelStep state={duel} onChoose={choose} busy={busy} error={error} />}
+      {(step === "location" || step === "duel") && <ParticipantBar participants={participants} />}
       {step === "result" && result && decisionId !== null && <ResultStep place={result} participants={participants} locationLabel={locationLabel} decisionId={decisionId} onRestart={restart} />}
     </main>
   );
