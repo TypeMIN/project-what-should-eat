@@ -19,7 +19,7 @@ const friend = { id: 11, loginId: "frienduser", displayName: "친구" };
 const candidates = Array.from({ length: 3 }, (_, index) => ({
   id: String(index + 1),
   name: `테스트 식당 ${index + 1}`,
-  category: "음식점 > 한식 > 백반",
+  category: `음식점 > 한식 > 국수 > 칼국수 > 테스트 식당 ${index + 1}`,
   distanceMeters: 50 + index * 10,
   address: "서울시 강남구",
   roadAddress: "서울시 강남구 테스트로",
@@ -97,6 +97,8 @@ test("현재 위치와 참가자 선택부터 A/B 결과와 이력까지 완주�
 
   await page.getByRole("button", { name: /내 현재 위치 사용하기/ }).click();
   await expect(page.getByText("ROUND 1 / 2")).toBeVisible();
+  await expect(page.getByText("VS", { exact: true })).toBeVisible();
+  await expect(page.locator(".place-card").first().locator(".category")).toHaveText("한식 · 국수 · 칼국수");
   await expect(page.locator(".category-badge")).toHaveCount(2);
   await expect(page.getByText(/도보 1분/).first()).toBeVisible();
   await expectNoHorizontalOverflow(page);

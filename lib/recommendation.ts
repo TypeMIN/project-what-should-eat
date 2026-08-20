@@ -1,3 +1,4 @@
+import { categoryLevels } from "@/lib/category";
 import type { AppUser, PlaceCandidate, PreferenceResponse } from "@/lib/types";
 import { isMealCandidate } from "@/lib/candidates";
 
@@ -39,7 +40,7 @@ const CATEGORY_DISLIKE_THRESHOLD = 2;
 const DEFAULT_SCORE = 0;
 
 export function getMajorCategory(category: string) {
-  const levels = category.split(">").map((level) => level.trim()).filter(Boolean);
+  const levels = categoryLevels(category);
   const restaurantIndex = levels.indexOf("음식점");
   if (restaurantIndex >= 0) return levels[restaurantIndex + 1] || "기타";
   return levels[1] || levels[0] || "기타";
