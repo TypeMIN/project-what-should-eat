@@ -18,7 +18,7 @@ type SignupBody = {
   gender?: Gender;
 };
 
-const GENDERS: Gender[] = ["male", "female", "other", "prefer_not_to_say"];
+const GENDERS: Gender[] = ["male", "female"];
 
 export async function POST(request: Request) {
   const body = await readJson<SignupBody>(request);
@@ -31,9 +31,9 @@ export async function POST(request: Request) {
   const currentYear = new Date().getFullYear();
 
   if (!isValidLoginId(loginId)) {
-    return apiError("ID는 영문 소문자, 숫자, 밑줄로 3~20자여야 합니다.");
+    return apiError("ID는 영문 소문자와 숫자로 3~20자여야 합니다.");
   }
-  if (!isValidPin(pin)) return apiError("PIN은 숫자 4~12자리여야 합니다.");
+  if (!isValidPin(pin)) return apiError("PIN은 숫자 4~6자리여야 합니다.");
   if (displayName.length < 1 || displayName.length > 30) {
     return apiError("표시 이름은 1~30자로 입력해 주세요.");
   }
