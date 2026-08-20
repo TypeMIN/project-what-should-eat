@@ -1,16 +1,27 @@
 import { render, screen } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
 import Home from "@/app/page";
 
-test("홈 화면은 시작 안내 제목과 배포 링크를 보여준다", () => {
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+test("로그인하지 않은 사용자는 서비스 소개와 로그인 화면을 본다", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: "로그인이 필요합니다." }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ),
+  );
+
   render(<Home />);
 
-  expect(
-    screen.getByRole("heading", { level: 1, name: /To get started/i })
-  ).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /Deploy Now/i })).toHaveAttribute(
-    "href",
-    expect.stringContaining("vercel.com/new")
-  );
+  expect(await screen.findByRole("heading", { level: 1, name: /고민은 짧게/ })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "로그인" })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByLabelText("ID")).toBeRequired();
+  expect(screen.queryByText(/못 먹는 음식/)).not.toBeInTheDocument();
 });
