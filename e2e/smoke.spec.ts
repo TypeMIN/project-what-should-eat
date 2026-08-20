@@ -2,18 +2,12 @@ import { expect, test } from "@playwright/test";
 
 const user = {
   id: 10,
-  loginId: "host_user",
+  loginId: "hostuser",
   displayName: "진행자",
   birthYear: 2000,
   gender: "prefer_not_to_say",
 };
-const friend = {
-  id: 11,
-  loginId: "friend_user",
-  displayName: "친구",
-  birthYear: 2000,
-  gender: "prefer_not_to_say",
-};
+const friend = { id: 11, loginId: "frienduser", displayName: "친구" };
 const candidates = Array.from({ length: 3 }, (_, index) => ({
   id: String(index + 1),
   name: `테스트 식당 ${index + 1}`,
@@ -55,18 +49,29 @@ test("현재 위치와 참가자 선택부터 A/B 결과와 이력까지 완주�
   await page.route("**/api/places/candidates", (route) =>
     route.fulfill({ contentType: "application/json", body: JSON.stringify({ candidates }) }),
   );
+  await page.route("**/api/places/search?*", (route) =>
+    route.fulfill({ contentType: "application/json", body: JSON.stringify({ places: [candidates[1]] }) }),
+  );
+  await page.route("**/api/feedback", (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ feedback: [] }) });
+    }
+    const body = route.request().postDataJSON();
+    const place = body.place ?? candidates[0];
+    return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ feedback: { id: 1, place, response: body.response, source: body.decisionId ? "decision" : "manual", decisionId: body.decisionId ?? null, updatedAt: new Date().toISOString() } }) });
+  });
   await page.route("**/api/decisions", (route) => {
     if (route.request().method() === "POST") {
       return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ decision: { id: 1, decidedAt: new Date().toISOString() } }) });
     }
-    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ decisions: [{ id: 1, place: candidates[0], participants: [user, friend], decidedAt: "2026-08-20T02:00:00.000Z" }] }) });
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ decisions: [{ id: 1, place: candidates[0], participants: [user, friend], decidedAt: "2026-08-20T02:00:00.000Z", myFeedback: "liked" }] }) });
   });
 
   await page.goto("/");
-  await page.getByLabel("ID").fill("host_user");
+  await page.getByLabel("ID").fill("hostuser");
   await page.getByLabel("PIN").fill("1234");
   await page.getByRole("button", { name: "로그인", exact: true }).click();
-  await expect(page.getByRole("banner").getByText("@host_user")).toBeVisible();
+  await expect(page.getByRole("banner").getByText("@hostuser")).toBeVisible();
 
   await page.getByLabel("친구 ID").fill("friend");
   await page.getByRole("button", { name: "검색", exact: true }).click();
@@ -81,8 +86,22 @@ test("현재 위치와 참가자 선택부터 A/B 결과와 이력까지 완주�
   await page.locator(".place-card").first().click();
 
   await expect(page.getByText("오늘의 선택")).toBeVisible();
+  const resultMembers = page.locator(".result-meta .participant-names");
+  await expect(resultMembers).toContainText("진행자");
+  await expect(resultMembers).toContainText("@hostuser");
+  await expect(resultMembers).toContainText("친구");
+  await expect(resultMembers).toContainText("@frienduser");
   await expect(page.getByText("선택 결과가 지난 선택에 저장됐어요.")).toBeVisible();
+  await page.getByRole("button", { name: "좋다" }).click();
+  await expect(page.getByRole("button", { name: "좋다" })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "지난 선택" }).click();
   await expect(page.getByRole("heading", { level: 2, name: "테스트 식당 1" })).toBeVisible();
-  await expect(page.getByText("진행자, 친구")).toBeVisible();
+  const members = page.locator(".history-members");
+  await expect(members).toContainText("진행자");
+  await expect(members).toContainText("@hostuser");
+  await expect(members).toContainText("친구");
+  await expect(members).toContainText("@frienduser");
+  await page.getByLabel("평가할 식당 이름").fill("테스트 식당");
+  await page.getByRole("button", { name: "찾기", exact: true }).click();
+  await expect(page.getByText("테스트 식당 2")).toBeVisible();
 });
