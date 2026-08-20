@@ -10,7 +10,7 @@ None. 첫 작업이다.
 
 ## Acceptance criteria
 
-- [ ] 배포된 공개 주소에서 앱이 열린다.
+- [x] 배포된 공개 주소에서 앱이 열린다.
 - [x] 새 사용자가 고유 ID, PIN, 표시 이름, 출생연도, 성별을 입력해 가입할 수 있다.
 - [x] 이미 존재하는 ID로 가입을 시도하면 거부되고 이유가 표시된다.
 - [x] 가입한 ID와 올바른 PIN으로 로그인하면 로그인 상태가 된다.
@@ -42,10 +42,10 @@ One review pass after this task.
 
 ## Status
 
-in_progress
+completed
 
 ## Execution
 
-- Verification: 로컬 실제 환경에서 가입 3건, 중복 가입 `409`, 잘못된 PIN `401`, 올바른 로그인·새로고침 세션 유지·로그아웃을 확인했다. DB 직접 조회에서 3개 PIN 모두 `scrypt$` 해시이며 원문과 다르고 최단 길이는 116자였다. 공개 Preview 주소 확인만 남았다.
-- Blocker: 구현 브랜치 푸시 후 Vercel Preview가 Ready가 되어야 공개 주소 기준을 닫을 수 있다.
+- Verification: Vercel Preview `https://what-should-eat-git-codex-core-loop-mvp-type-min.vercel.app`가 `Ready`이고 Next.js 서버 산출물이 생성된 것을 확인했다. 로컬 실제 환경에서 가입 3건, 중복 가입 `409`, 잘못된 PIN `401`, 올바른 로그인·새로고침 세션 유지·로그아웃을 확인했다. DB 직접 조회에서 3개 PIN 모두 `scrypt$` 해시이며 원문과 다르고 최단 길이는 116자였다.
+- Blocker: 없음.
 - Revision: Supabase Auth의 이메일 모델 대신 앱 전용 ID+PIN 계정과 30일 HttpOnly 세션을 사용한다. PIN은 무작위 salt를 둔 `scrypt`, 세션 토큰은 SHA-256 해시만 저장하며 모든 접근은 서버 전용 Supabase 클라이언트를 거친다.
