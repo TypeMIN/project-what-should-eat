@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = "http://localhost:3000";
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL;
+const baseURL = externalBaseURL ?? "http://localhost:3000";
 
 // 브라우저가 이미 설치된 환경(예: Claude Code 원격 세션)에서는
 // PLAYWRIGHT_CHROMIUM_PATH로 실행 파일을 직접 지정한다.
@@ -27,10 +28,12 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: "bun run dev",
-    url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: externalBaseURL
+    ? undefined
+    : {
+        command: "bun run dev",
+        url: baseURL,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+      },
 });
