@@ -15,6 +15,7 @@ import type {
 } from "@/lib/types";
 
 type AuthMode = "login" | "signup";
+type IdCheckStatus = "idle" | "checking" | "available" | "taken";
 type AppView = "decide" | "history";
 type DecisionStep = "participants" | "location" | "duel" | "result";
 
@@ -41,15 +42,55 @@ function LoadingScreen() {
 
 function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: AppUser) => void }) {
   const [mode, setMode] = useState<AuthMode>("login");
+  const [loginId, setLoginId] = useState("");
+  const [checkedLoginId, setCheckedLoginId] = useState("");
+  const [idCheckStatus, setIdCheckStatus] = useState<IdCheckStatus>("idle");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const currentYear = new Date().getFullYear();
+  const birthYears = Array.from({ length: currentYear - 1899 }, (_, index) => currentYear - index);
+
+  function changeMode(nextMode: AuthMode) {
+    setMode(nextMode);
+    setError("");
+    setCheckedLoginId("");
+    setIdCheckStatus("idle");
+  }
+
+  async function checkLoginId() {
+    const normalizedId = loginId.trim().toLowerCase();
+    setError("");
+    setCheckedLoginId("");
+
+    if (!/^[a-z0-9]{3,20}$/.test(normalizedId)) {
+      setIdCheckStatus("idle");
+      setError("ID는 영문 소문자와 숫자로 3~20자여야 합니다.");
+      return;
+    }
+
+    setIdCheckStatus("checking");
+    try {
+      const { available } = await requestApi<{ available: boolean }>(`/api/auth/check-id?loginId=${encodeURIComponent(normalizedId)}`);
+      setCheckedLoginId(normalizedId);
+      setIdCheckStatus(available ? "available" : "taken");
+    } catch (caught) {
+      setIdCheckStatus("idle");
+      setError(caught instanceof Error ? caught.message : "ID 중복 여부를 확인하지 못했습니다.");
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy(true);
     setError("");
     const form = new FormData(event.currentTarget);
+    const normalizedId = String(form.get("loginId") ?? "").trim().toLowerCase();
+
+    if (mode === "signup" && (idCheckStatus !== "available" || checkedLoginId !== normalizedId)) {
+      setError("ID 중복확인을 먼저 완료해 주세요.");
+      return;
+    }
+
+    setBusy(true);
     const body = mode === "login"
       ? { loginId: form.get("loginId"), pin: form.get("pin") }
       : {
@@ -95,22 +136,55 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: AppUser) => v
       <section className="auth-panel">
         <div className="auth-card">
           <div className="auth-tabs" role="tablist" aria-label="로그인 또는 가입">
-            <button type="button" role="tab" aria-selected={mode === "login"} onClick={() => { setMode("login"); setError(""); }}>로그인</button>
-            <button type="button" role="tab" aria-selected={mode === "signup"} onClick={() => { setMode("signup"); setError(""); }}>처음이에요</button>
+            <button type="button" role="tab" aria-selected={mode === "login"} onClick={() => changeMode("login")}>로그인</button>
+            <button type="button" role="tab" aria-selected={mode === "signup"} onClick={() => changeMode("signup")}>처음이에요</button>
           </div>
           <div className="auth-heading">
             <h2>{mode === "login" ? "다시 만나 반가워요" : "같이 한 끼 시작해요"}</h2>
             <p>{mode === "login" ? "ID와 PIN을 입력해 주세요." : "다음에도 알아볼 수 있게 계정을 만들어요."}</p>
           </div>
           <form onSubmit={submit} className="form-stack">
-            <label><span>ID</span><input name="loginId" autoComplete="username" placeholder="영문 소문자, 숫자, 밑줄" minLength={3} maxLength={20} required /></label>
-            <label><span>PIN</span><input name="pin" type="password" inputMode="numeric" autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="숫자 4~12자리" pattern="[0-9]{4,12}" required /></label>
+            <div className="field-group">
+              <label htmlFor="auth-login-id">ID</label>
+              <div className={mode === "signup" ? "input-action" : undefined}>
+                <input
+                  id="auth-login-id"
+                  name="loginId"
+                  value={loginId}
+                  onChange={(event) => {
+                    setLoginId(event.target.value.toLowerCase());
+                    setCheckedLoginId("");
+                    setIdCheckStatus("idle");
+                  }}
+                  autoComplete="username"
+                  placeholder="영문 소문자와 숫자"
+                  pattern="[a-z0-9]{3,20}"
+                  minLength={3}
+                  maxLength={20}
+                  required
+                />
+                {mode === "signup" && (
+                  <button type="button" onClick={checkLoginId} disabled={idCheckStatus === "checking"}>
+                    {idCheckStatus === "checking" ? <LoaderCircle className="spin" size={17} /> : "중복확인"}
+                  </button>
+                )}
+              </div>
+              {mode === "signup" && checkedLoginId === loginId.trim().toLowerCase() && idCheckStatus === "available" && <p className="field-message success" role="status">사용할 수 있는 ID입니다.</p>}
+              {mode === "signup" && checkedLoginId === loginId.trim().toLowerCase() && idCheckStatus === "taken" && <p className="field-message error" role="alert">이미 사용 중인 ID입니다.</p>}
+            </div>
+            <label><span>PIN</span><input name="pin" type="password" inputMode="numeric" autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="숫자 4~6자리" pattern="[0-9]{4,6}" minLength={4} maxLength={6} required /></label>
             {mode === "signup" && (
               <>
                 <label><span>표시 이름</span><input name="displayName" autoComplete="name" placeholder="친구들에게 보일 이름" maxLength={30} required /></label>
                 <div className="form-row">
-                  <label><span>출생연도</span><input name="birthYear" type="number" inputMode="numeric" min={1900} max={currentYear} placeholder="2000" required /></label>
-                  <label><span>성별</span><select name="gender" defaultValue="" required><option value="" disabled>선택</option><option value="male">남성</option><option value="female">여성</option><option value="other">기타</option><option value="prefer_not_to_say">응답하지 않음</option></select></label>
+                  <label><span>출생연도</span><select name="birthYear" defaultValue="" required><option value="" disabled>연도 선택</option>{birthYears.map((year) => <option key={year} value={year}>{year}년</option>)}</select></label>
+                  <fieldset className="gender-field">
+                    <legend>성별</legend>
+                    <div className="gender-toggle">
+                      <label><input type="radio" name="gender" value="male" required /><span>남성</span></label>
+                      <label><input type="radio" name="gender" value="female" required /><span>여성</span></label>
+                    </div>
+                  </fieldset>
                 </div>
               </>
             )}
@@ -199,7 +273,7 @@ function ParticipantsStep({ currentUser, participants, setParticipants, onNext }
           </div>
         ))}
       </div>
-      <form className="search-box" onSubmit={searchUsers}><Search size={19} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="친구 ID로 검색" aria-label="친구 ID" /><button disabled={busy}>{busy ? <LoaderCircle className="spin" size={18} /> : "검색"}</button></form>
+      <form className="search-box" onSubmit={searchUsers}><Search size={19} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="친구 ID 또는 표시 이름" aria-label="친구 ID 또는 표시 이름" /><button disabled={busy}>{busy ? <LoaderCircle className="spin" size={18} /> : "검색"}</button></form>
       {error && <p className="message error" role="alert">{error}</p>}
       {searched && (
         <div className="search-results" aria-live="polite">

@@ -33,11 +33,11 @@ export function normalizeLoginId(value: string) {
 }
 
 export function isValidLoginId(value: string) {
-  return /^[a-z0-9_]{3,20}$/.test(value);
+  return /^[a-z0-9]{3,20}$/.test(value);
 }
 
 export function isValidPin(value: string) {
-  return /^\d{4,12}$/.test(value);
+  return /^\d{4,6}$/.test(value);
 }
 
 export { hashPin, verifyPin } from "@/lib/security";

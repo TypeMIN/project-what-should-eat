@@ -195,8 +195,8 @@ button { color: inherit; }
 .auth-heading p { margin: 0; color: var(--muted); font-size: 14px; }
 
 .form-stack { display: grid; gap: 17px; }
-.form-stack label, .form-row label { display: grid; gap: 8px; }
-.form-stack label > span { font-size: 13px; font-weight: 750; }
+.form-stack label, .form-row label, .field-group { display: grid; gap: 8px; }
+.form-stack label > span, .field-group > label, .gender-field legend { font-size: 13px; font-weight: 750; }
 
 .form-stack input,
 .form-stack select,
@@ -214,6 +214,51 @@ button { color: inherit; }
 .form-stack input:focus, .form-stack select:focus, .search-box:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px rgba(47, 111, 78, 0.11); }
 .form-stack input::placeholder, .search-box input::placeholder { color: #b1b1ad; }
 .form-row { display: grid; grid-template-columns: 1fr 1.2fr; gap: 12px; }
+
+.input-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.input-action button {
+  min-width: 84px;
+  border: 1px solid var(--green);
+  border-radius: 11px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--green);
+  background: var(--green-soft);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.input-action button:disabled { opacity: 0.58; cursor: wait; }
+
+.field-message { margin: 0; font-size: 12px; font-weight: 700; }
+.field-message.success { color: var(--green); }
+.field-message.error { color: #a33c30; }
+
+.gender-field { min-width: 0; margin: 0; padding: 0; border: 0; }
+.gender-field legend { margin-bottom: 8px; }
+.gender-toggle { height: 48px; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.gender-toggle label { position: relative; display: block; }
+.gender-toggle input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.gender-toggle span {
+  height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 750;
+}
+.gender-toggle input:checked + span { border-color: var(--green); color: var(--green); background: var(--green-soft); }
+.gender-toggle input:focus-visible + span { border-color: var(--green); box-shadow: 0 0 0 3px rgba(47, 111, 78, 0.11); }
 
 .primary-button,
 .secondary-button {
