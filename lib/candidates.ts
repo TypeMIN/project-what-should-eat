@@ -1,9 +1,10 @@
+import { categoryLevels } from "@/lib/category";
 import type { PlaceCandidate } from "@/lib/types";
 
 export const CANDIDATE_LIMIT = 8;
 
 export function isMealCandidate(candidate: PlaceCandidate) {
-  const levels = candidate.category.split(">").map((level) => level.trim());
+  const levels = categoryLevels(candidate.category);
   return !levels.some((level) => level === "술집" || level === "간식");
 }
 

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { normalizeCategory } from "@/lib/category";
 import type { PlaceCandidate, RegionResult } from "@/lib/types";
 
 type KakaoPlace = {
@@ -43,7 +44,7 @@ function toCandidate(place: KakaoPlace): PlaceCandidate {
   return {
     id: place.id,
     name: place.place_name,
-    category: place.category_name,
+    category: normalizeCategory(place.category_name),
     distanceMeters: Number(place.distance || 0),
     address: place.address_name,
     roadAddress: place.road_address_name,

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import { shuffle } from "@/lib/candidates";
+import { getCategoryParts } from "@/lib/category";
 import { chooseDuel, startDuel, type DuelState } from "@/lib/duel";
 import type {
   AppUser, DecisionHistory, DuelComparison, Gender, ParticipantSummary,
@@ -29,17 +30,8 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   아시아음식: Salad,
 };
 
-function categoryParts(category: string) {
-  const parts = category.split(">").map((part) => part.trim()).filter(Boolean);
-  const meaningful = parts.filter((part) => part !== "음식점");
-  return {
-    major: meaningful[0] || "음식점",
-    detail: meaningful.slice(1).join(" · ") || meaningful[0] || "음식점",
-  };
-}
-
 function CategoryBadge({ category }: { category: string }) {
-  const { major } = categoryParts(category);
+  const { major } = getCategoryParts(category);
   const Icon = CATEGORY_ICONS[major] ?? Utensils;
   return <span className="category-badge"><Icon size={21} aria-hidden /></span>;
 }
@@ -360,7 +352,7 @@ function LocationStep({ onBack, onSelect, busy, error }: { onBack: () => void; o
 }
 
 function PlaceCard({ place, onChoose, disabled }: { place: PlaceCandidate; onChoose: () => void; disabled: boolean }) {
-  const { major, detail } = categoryParts(place.category);
+  const { major, detail } = getCategoryParts(place.category);
   return (
     <button className="place-card" data-slot="candidate" onClick={onChoose} disabled={disabled}>
       <span className="place-card-heading">
@@ -384,7 +376,7 @@ function DuelStep({ state, onChoose, busy, error }: { state: DuelState; onChoose
       <div className="round-bar" aria-hidden>
         {Array.from({ length: state.totalRounds }, (_, index) => <span key={index} className={index < state.round ? "active" : ""} />)}
       </div>
-      <div className="duel-grid"><PlaceCard place={state.winner} onChoose={() => onChoose(state.winner)} disabled={busy} /><span className="versus">또는</span><PlaceCard place={state.challenger} onChoose={() => onChoose(state.challenger)} disabled={busy} /></div>
+      <div className="duel-grid"><PlaceCard place={state.winner} onChoose={() => onChoose(state.winner)} disabled={busy} /><span className="versus">VS</span><PlaceCard place={state.challenger} onChoose={() => onChoose(state.challenger)} disabled={busy} /></div>
       {busy && <p className="message neutral"><LoaderCircle className="spin" size={17} /> 결과를 저장하고 있어요…</p>}
       {error && <p className="message error" role="alert">{error}</p>}
     </section>
@@ -408,7 +400,7 @@ function FeedbackControls({ value, onChange, busy, includeNotVisited = true }: {
 }
 
 function ResultStep({ place, participants, locationLabel, decisionId, onRestart }: { place: PlaceCandidate; participants: ParticipantSummary[]; locationLabel: string; decisionId: number; onRestart: () => void }) {
-  const { detail: shortCategory } = categoryParts(place.category);
+  const { detail: shortCategory } = getCategoryParts(place.category);
   const [feedback, setFeedback] = useState<PreferenceResponse | null>(null);
   const [feedbackBusy, setFeedbackBusy] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
@@ -506,7 +498,7 @@ function HistoryView() {
         <form className="search-box large" onSubmit={searchPlaces}><Search size={20} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="평가할 식당 이름" aria-label="평가할 식당 이름" /><button disabled={searching}>{searching ? <LoaderCircle className="spin" size={18} /> : "찾기"}</button></form>
         {searched && <div className="rating-search-results">{places.length === 0 ? <p className="empty-inline">일치하는 음식점을 찾지 못했어요.</p> : places.map((place) => {
           const existing = manualByPlace.get(place.id);
-          return <div className="rating-place" key={place.id}><span><strong>{place.name}</strong><small>{place.category.split(">").slice(1).map((part) => part.trim()).join(" · ")} · {place.roadAddress || place.address}</small></span><FeedbackControls value={existing?.response ?? null} onChange={(response) => saveManualFeedback(place, response)} busy={savingKey === `place-${place.id}`} includeNotVisited={false} /></div>;
+          return <div className="rating-place" key={place.id}><span><strong>{place.name}</strong><small>{getCategoryParts(place.category).label} · {place.roadAddress || place.address}</small></span><FeedbackControls value={existing?.response ?? null} onChange={(response) => saveManualFeedback(place, response)} busy={savingKey === `place-${place.id}`} includeNotVisited={false} /></div>;
         })}</div>}
         {notice && <p className="message neutral" role="status">{notice}</p>}
       </section>
@@ -517,7 +509,7 @@ function HistoryView() {
         : <div className="history-list">{decisions.map((decision) => (
           <article className="history-item" key={decision.id}>
             <span className="history-icon"><CategoryBadge category={decision.place.category} /></span>
-            <div className="history-copy"><p><Clock3 size={15} /> {new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeStyle: "short" }).format(new Date(decision.decidedAt))}</p><h2>{decision.place.name}</h2><span>{decision.place.category.split(">").slice(1).map((part) => part.trim()).join(" · ")}</span></div>
+            <div className="history-copy"><p><Clock3 size={15} /> {new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeStyle: "short" }).format(new Date(decision.decidedAt))}</p><h2>{decision.place.name}</h2><span>{getCategoryParts(decision.place.category).label}</span></div>
             <div className="history-members"><Users size={17} /><ParticipantNames participants={decision.participants} /></div>
             <div className="history-feedback"><FeedbackControls value={decision.myFeedback ?? null} onChange={(response) => saveDecisionFeedback(decision.id, response)} busy={savingKey === `decision-${decision.id}`} /></div>
           </article>
