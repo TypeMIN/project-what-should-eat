@@ -7,7 +7,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test("로그인하지 않은 사용자는 서비스 소개와 로그인 화면을 본다", async () => {
+test("로그인하지 않은 사용자는 브랜드와 로그인 폼을 본다", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue(
@@ -20,9 +20,11 @@ test("로그인하지 않은 사용자는 서비스 소개와 로그인 화면�
 
   render(<Home />);
 
-  expect(await screen.findByRole("heading", { level: 1, name: /고민은 짧게/ })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { level: 1, name: "오늘 뭐 먹지?" })).toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "로그인" })).toHaveAttribute("aria-selected", "true");
   expect(screen.getByLabelText("ID")).toBeRequired();
+  expect(screen.queryByText("고민은 짧게,")).not.toBeInTheDocument();
+  expect(screen.queryByText("멤버 모으기")).not.toBeInTheDocument();
   expect(screen.queryByText(/못 먹는 음식/)).not.toBeInTheDocument();
 });
 

@@ -1,4 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function expectNoHorizontalOverflow(page: Page) {
+  const dimensions = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+}
 
 const user = {
   id: 10,
@@ -27,7 +35,9 @@ test("로그인 화면이 열리고 가입 항목에는 제외조건이 없다",
   await page.goto("/");
 
   await expect(page).toHaveTitle("오늘 뭐 먹지?");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("고민은 짧게");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("오늘 뭐 먹지?");
+  await expect(page.getByText("고민은 짧게,")).toHaveCount(0);
+  await expect(page.getByText("멤버 모으기")).toHaveCount(0);
   await page.getByRole("tab", { name: "처음이에요" }).click();
   await expect(page.getByLabel("출생연도")).toBeVisible();
   await expect(page.getByLabel("출생연도")).toHaveJSProperty("tagName", "SELECT");
@@ -39,6 +49,7 @@ test("로그인 화면이 열리고 가입 항목에는 제외조건이 없다",
 });
 
 test("현재 위치와 참가자 선택부터 A/B 결과와 이력까지 완주한다", async ({ page, context }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({ latitude: 37.5, longitude: 127 });
   await page.route("**/api/auth/me", (route) =>
@@ -76,6 +87,7 @@ test("현재 위치와 참가자 선택부터 A/B 결과와 이력까지 완주�
   await page.getByLabel("PIN").fill("1234");
   await page.getByRole("button", { name: "로그인", exact: true }).click();
   await expect(page.getByRole("banner").getByText("@hostuser")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
 
   await page.getByLabel("친구 ID 또는 표시 이름").fill("친구");
   await page.getByRole("button", { name: "검색", exact: true }).click();
@@ -85,11 +97,15 @@ test("현재 위치와 참가자 선택부터 A/B 결과와 이력까지 완주�
 
   await page.getByRole("button", { name: /내 현재 위치 사용하기/ }).click();
   await expect(page.getByText("ROUND 1 / 2")).toBeVisible();
+  await expect(page.locator(".category-badge")).toHaveCount(2);
+  await expect(page.getByText(/도보 1분/).first()).toBeVisible();
+  await expectNoHorizontalOverflow(page);
   await page.locator(".place-card").first().click();
   await expect(page.getByText("ROUND 2 / 2")).toBeVisible();
   await page.locator(".place-card").first().click();
 
   await expect(page.getByText("오늘의 선택")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
   const resultMembers = page.locator(".result-meta .participant-names");
   await expect(resultMembers).toContainText("진행자");
   await expect(resultMembers).toContainText("@hostuser");
@@ -100,6 +116,7 @@ test("현재 위치와 참가자 선택부터 A/B 결과와 이력까지 완주�
   await expect(page.getByRole("button", { name: "좋다" })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "지난 선택" }).click();
   await expect(page.getByRole("heading", { level: 2, name: "테스트 식당 1" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
   const members = page.locator(".history-members");
   await expect(members).toContainText("진행자");
   await expect(members).toContainText("@hostuser");
