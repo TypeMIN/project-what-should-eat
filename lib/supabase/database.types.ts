@@ -29,6 +29,24 @@ export type Database = {
         Update: { address_name?: string; category_name?: string; decided_at?: string; distance_meters?: number; host_user_id?: number; id?: never; latitude?: number; longitude?: number; place_id?: string; place_name?: string; place_url?: string; road_address_name?: string };
         Relationships: [{ foreignKeyName: "meal_decisions_host_user_id_fkey"; columns: ["host_user_id"]; isOneToOne: false; referencedRelation: "app_users"; referencedColumns: ["id"] }];
       };
+      meal_comparisons: {
+        Row: { created_at: string; decision_id: number; host_user_id: number; id: number; loser_category_name: string; loser_place_id: string; round: number; winner_category_name: string; winner_place_id: string };
+        Insert: { created_at?: string; decision_id: number; host_user_id: number; id?: never; loser_category_name: string; loser_place_id: string; round: number; winner_category_name: string; winner_place_id: string };
+        Update: { created_at?: string; decision_id?: number; host_user_id?: number; id?: never; loser_category_name?: string; loser_place_id?: string; round?: number; winner_category_name?: string; winner_place_id?: string };
+        Relationships: [
+          { foreignKeyName: "meal_comparisons_decision_id_fkey"; columns: ["decision_id"]; isOneToOne: false; referencedRelation: "meal_decisions"; referencedColumns: ["id"] },
+          { foreignKeyName: "meal_comparisons_host_user_id_fkey"; columns: ["host_user_id"]; isOneToOne: false; referencedRelation: "app_users"; referencedColumns: ["id"] },
+        ];
+      };
+      place_feedback: {
+        Row: { address_name: string; category_name: string; created_at: string; decision_id: number | null; id: number; latitude: number; longitude: number; place_id: string; place_name: string; place_url: string; response: string; road_address_name: string; source: string; updated_at: string; user_id: number };
+        Insert: { address_name?: string; category_name: string; created_at?: string; decision_id?: number | null; id?: never; latitude: number; longitude: number; place_id: string; place_name: string; place_url?: string; response: string; road_address_name?: string; source: string; updated_at?: string; user_id: number };
+        Update: { address_name?: string; category_name?: string; created_at?: string; decision_id?: number | null; id?: never; latitude?: number; longitude?: number; place_id?: string; place_name?: string; place_url?: string; response?: string; road_address_name?: string; source?: string; updated_at?: string; user_id?: number };
+        Relationships: [
+          { foreignKeyName: "place_feedback_decision_id_fkey"; columns: ["decision_id"]; isOneToOne: false; referencedRelation: "meal_decisions"; referencedColumns: ["id"] },
+          { foreignKeyName: "place_feedback_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "app_users"; referencedColumns: ["id"] },
+        ];
+      };
     };
     Views: { [_ in never]: never };
     Functions: { [_ in never]: never };

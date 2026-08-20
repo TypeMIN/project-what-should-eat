@@ -86,3 +86,13 @@ export async function searchRegions(query: string): Promise<RegionResult[]> {
     longitude: Number(place.x),
   }));
 }
+
+export async function searchRestaurants(query: string): Promise<PlaceCandidate[]> {
+  const params = new URLSearchParams({
+    query,
+    category_group_code: "FD6",
+    size: "10",
+  });
+  const result = await requestKakao("/v2/local/search/keyword.json", params);
+  return result.documents.map(toCandidate);
+}

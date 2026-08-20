@@ -8,6 +8,8 @@ export type AppUser = {
   gender: Gender;
 };
 
+export type ParticipantSummary = Pick<AppUser, "id" | "loginId" | "displayName">;
+
 export type PlaceCandidate = {
   id: string;
   name: string;
@@ -18,6 +20,23 @@ export type PlaceCandidate = {
   placeUrl: string;
   latitude: number;
   longitude: number;
+};
+
+export type PreferenceResponse = "liked" | "disliked" | "not_visited";
+
+export type DuelComparison = {
+  round: number;
+  winner: Pick<PlaceCandidate, "id" | "category">;
+  loser: Pick<PlaceCandidate, "id" | "category">;
+};
+
+export type PlaceFeedback = {
+  id: number;
+  place: PlaceCandidate;
+  response: PreferenceResponse;
+  source: "decision" | "manual";
+  decisionId: number | null;
+  updatedAt: string;
 };
 
 export type RegionResult = {
@@ -31,6 +50,7 @@ export type RegionResult = {
 export type DecisionHistory = {
   id: number;
   place: PlaceCandidate;
-  participants: Pick<AppUser, "id" | "loginId" | "displayName">[];
+  participants: ParticipantSummary[];
   decidedAt: string;
+  myFeedback: PreferenceResponse | null;
 };

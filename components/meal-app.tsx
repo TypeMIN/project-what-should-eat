@@ -3,12 +3,16 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
   ArrowLeft, Check, ChevronRight, Clock3, History, LoaderCircle, LocateFixed,
-  LogOut, MapPin, Search, Sparkles, UserPlus, Users, Utensils, X,
+  LogOut, MapPin, Search, Sparkles, ThumbsDown, ThumbsUp, UserMinus,
+  UserPlus, Users, Utensils, X,
 } from "lucide-react";
 
 import { shuffle } from "@/lib/candidates";
 import { chooseDuel, startDuel, type DuelState } from "@/lib/duel";
-import type { AppUser, DecisionHistory, Gender, PlaceCandidate, RegionResult } from "@/lib/types";
+import type {
+  AppUser, DecisionHistory, DuelComparison, Gender, ParticipantSummary,
+  PlaceCandidate, PlaceFeedback, PreferenceResponse, RegionResult,
+} from "@/lib/types";
 
 type AuthMode = "login" | "signup";
 type AppView = "decide" | "history";
@@ -150,9 +154,19 @@ function Progress({ step }: { step: DecisionStep }) {
   );
 }
 
-function ParticipantsStep({ currentUser, participants, setParticipants, onNext }: { currentUser: AppUser; participants: AppUser[]; setParticipants: (users: AppUser[]) => void; onNext: () => void }) {
+function ParticipantNames({ participants }: { participants: ParticipantSummary[] }) {
+  return (
+    <span className="participant-names">
+      {participants.map((participant) => (
+        <span key={participant.id}>{participant.displayName}<small>@{participant.loginId}</small></span>
+      ))}
+    </span>
+  );
+}
+
+function ParticipantsStep({ currentUser, participants, setParticipants, onNext }: { currentUser: AppUser; participants: ParticipantSummary[]; setParticipants: (users: ParticipantSummary[]) => void; onNext: () => void }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<AppUser[]>([]);
+  const [results, setResults] = useState<ParticipantSummary[]>([]);
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -162,20 +176,20 @@ function ParticipantsStep({ currentUser, participants, setParticipants, onNext }
     if (!query.trim()) return;
     setBusy(true); setError("");
     try {
-      const data = await requestApi<{ users: AppUser[] }>(`/api/users/search?q=${encodeURIComponent(query)}`);
+      const data = await requestApi<{ users: ParticipantSummary[] }>(`/api/users/search?q=${encodeURIComponent(query)}`);
       setResults(data.users); setSearched(true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "사용자를 검색하지 못했습니다.");
     } finally { setBusy(false); }
   }
 
-  function addUser(user: AppUser) {
+  function addUser(user: ParticipantSummary) {
     if (!participants.some((participant) => participant.id === user.id)) setParticipants([...participants, user]);
   }
 
   return (
     <section className="workflow-card">
-      <div className="section-heading"><span className="section-icon"><Users size={23} /></span><div><p className="eyebrow">STEP 1</p><h1>오늘 누구와 함께하나요?</h1><p>가입한 친구의 ID를 찾아 멤버로 추가해 주세요.</p></div></div>
+      <div className="section-heading"><span className="section-icon"><Users size={23} /></span><div><p className="eyebrow">STEP 1</p><h1>오늘 누구와 함께하나요?</h1><p>가입한 친구의 ID 또는 표시 이름을 찾아 멤버로 추가해 주세요.</p></div></div>
       <div className="member-list" aria-label="오늘의 참가자">
         {participants.map((participant) => (
           <div className="member-chip" key={participant.id}>
@@ -266,12 +280,43 @@ function DuelStep({ state, onChoose, busy, error }: { state: DuelState; onChoose
   );
 }
 
-function ResultStep({ place, participants, locationLabel, onRestart }: { place: PlaceCandidate; participants: AppUser[]; locationLabel: string; onRestart: () => void }) {
+function FeedbackControls({ value, onChange, busy, includeNotVisited = true }: { value: PreferenceResponse | null; onChange: (response: PreferenceResponse) => void; busy: boolean; includeNotVisited?: boolean }) {
+  const options: Array<{ value: PreferenceResponse; label: string; icon: typeof ThumbsUp }> = [
+    { value: "liked", label: "좋다", icon: ThumbsUp },
+    { value: "disliked", label: "싫다", icon: ThumbsDown },
+    ...(includeNotVisited ? [{ value: "not_visited" as const, label: "실제로는 방문하지 않음", icon: UserMinus }] : []),
+  ];
+  return (
+    <div className="feedback-controls" aria-label="개인 평가">
+      {options.map((option) => {
+        const Icon = option.icon;
+        return <button type="button" key={option.value} className={value === option.value ? "active" : ""} aria-pressed={value === option.value} onClick={() => onChange(option.value)} disabled={busy}><Icon size={15} /> {option.label}</button>;
+      })}
+    </div>
+  );
+}
+
+function ResultStep({ place, participants, locationLabel, decisionId, onRestart }: { place: PlaceCandidate; participants: ParticipantSummary[]; locationLabel: string; decisionId: number; onRestart: () => void }) {
   const shortCategory = place.category.split(">").slice(1).map((part) => part.trim()).join(" · ") || "음식점";
+  const [feedback, setFeedback] = useState<PreferenceResponse | null>(null);
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [feedbackError, setFeedbackError] = useState("");
+
+  async function saveFeedback(response: PreferenceResponse) {
+    setFeedbackBusy(true); setFeedbackError("");
+    try {
+      await requestApi("/api/feedback", { method: "POST", body: JSON.stringify({ decisionId, response }) });
+      setFeedback(response);
+    } catch (caught) {
+      setFeedbackError(caught instanceof Error ? caught.message : "평가를 저장하지 못했습니다.");
+    } finally { setFeedbackBusy(false); }
+  }
+
   return (
     <section className="result-card">
       <div className="confetti" aria-hidden="true">✦</div><span className="result-badge"><Check size={24} /></span><p className="eyebrow">오늘의 선택</p><h1>{place.name}</h1><p className="result-category">{shortCategory}</p>
-      <div className="result-meta"><span><MapPin size={17} /> {locationLabel}에서 {place.distanceMeters.toLocaleString()}m</span><span><Users size={17} /> {participants.map((participant) => participant.displayName).join(", ")}</span></div>
+      <div className="result-meta"><span><MapPin size={17} /> {locationLabel}에서 {place.distanceMeters.toLocaleString()}m</span><span><Users size={17} /> <ParticipantNames participants={participants} /></span></div>
+      <div className="result-feedback"><strong>직접 다녀온 뒤 어땠나요?</strong><p>내 평가는 내 추천에만 반영돼요.</p><FeedbackControls value={feedback} onChange={saveFeedback} busy={feedbackBusy} />{feedbackError && <p className="feedback-error" role="alert">{feedbackError}</p>}</div>
       {place.placeUrl && <a className="secondary-button" href={place.placeUrl} target="_blank" rel="noreferrer">카카오맵에서 보기 <ChevronRight size={17} /></a>}
       <button className="primary-button fit" onClick={onRestart}>새로운 한 끼 정하기 <Sparkles size={17} /></button>
       <p className="saved-note"><Check size={14} /> 선택 결과가 지난 선택에 저장됐어요.</p>
@@ -281,19 +326,80 @@ function ResultStep({ place, participants, locationLabel, onRestart }: { place: 
 
 function HistoryView() {
   const [decisions, setDecisions] = useState<DecisionHistory[]>([]);
+  const [manualFeedback, setManualFeedback] = useState<PlaceFeedback[]>([]);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [places, setPlaces] = useState<PlaceCandidate[]>([]);
+  const [searched, setSearched] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [savingKey, setSavingKey] = useState("");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
-    requestApi<{ decisions: DecisionHistory[] }>("/api/decisions")
-      .then((data) => setDecisions(data.decisions))
+    Promise.all([
+      requestApi<{ decisions: DecisionHistory[] }>("/api/decisions"),
+      requestApi<{ feedback: PlaceFeedback[] }>("/api/feedback"),
+    ])
+      .then(([decisionData, feedbackData]) => {
+        setDecisions(decisionData.decisions);
+        setManualFeedback(feedbackData.feedback.filter((item) => item.source === "manual"));
+      })
       .catch((caught) => setError(caught instanceof Error ? caught.message : "이력을 불러오지 못했습니다."))
       .finally(() => setBusy(false));
   }, []);
 
+  async function searchPlaces(event: FormEvent) {
+    event.preventDefault();
+    if (query.trim().length < 2) return;
+    setSearching(true); setNotice("");
+    try {
+      const data = await requestApi<{ places: PlaceCandidate[] }>(`/api/places/search?q=${encodeURIComponent(query)}`);
+      setPlaces(data.places); setSearched(true);
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "식당을 검색하지 못했습니다.");
+    } finally { setSearching(false); }
+  }
+
+  async function saveDecisionFeedback(decisionId: number, response: PreferenceResponse) {
+    const key = `decision-${decisionId}`;
+    setSavingKey(key); setNotice("");
+    try {
+      await requestApi("/api/feedback", { method: "POST", body: JSON.stringify({ decisionId, response }) });
+      setDecisions((current) => current.map((decision) => decision.id === decisionId ? { ...decision, myFeedback: response } : decision));
+      setNotice("개인 평가를 저장했습니다.");
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "평가를 저장하지 못했습니다.");
+    } finally { setSavingKey(""); }
+  }
+
+  async function saveManualFeedback(place: PlaceCandidate, response: PreferenceResponse) {
+    const key = `place-${place.id}`;
+    setSavingKey(key); setNotice("");
+    try {
+      const data = await requestApi<{ feedback: PlaceFeedback }>("/api/feedback", { method: "POST", body: JSON.stringify({ place, response }) });
+      setManualFeedback((current) => [data.feedback, ...current.filter((item) => item.place.id !== place.id)]);
+      setNotice(`${place.name} 평가를 저장했습니다.`);
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "평가를 저장하지 못했습니다.");
+    } finally { setSavingKey(""); }
+  }
+
+  const manualByPlace = new Map(manualFeedback.map((item) => [item.place.id, item]));
+
   return (
     <main className="app-main history-page">
-      <div className="page-heading"><p className="eyebrow">MY HISTORY</p><h1>지난 선택</h1><p>함께 고민해서 골랐던 한 끼들을 모았어요.</p></div>
+      <div className="page-heading"><p className="eyebrow">MY HISTORY</p><h1>지난 선택과 내 평가</h1><p>직접 먹어본 경험이 다음 추천을 더 나답게 만들어요.</p></div>
+      <section className="manual-rating-card">
+        <div><p className="eyebrow">ADD EXPERIENCE</p><h2>다른 곳에서 먹은 식당도 알려주세요</h2><p>추천으로 고르지 않은 식당도 이름을 찾아 평가할 수 있어요.</p></div>
+        <form className="search-box large" onSubmit={searchPlaces}><Search size={20} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="평가할 식당 이름" aria-label="평가할 식당 이름" /><button disabled={searching}>{searching ? <LoaderCircle className="spin" size={18} /> : "찾기"}</button></form>
+        {searched && <div className="rating-search-results">{places.length === 0 ? <p className="empty-inline">일치하는 음식점을 찾지 못했어요.</p> : places.map((place) => {
+          const existing = manualByPlace.get(place.id);
+          return <div className="rating-place" key={place.id}><span><strong>{place.name}</strong><small>{place.category.split(">").slice(1).map((part) => part.trim()).join(" · ")} · {place.roadAddress || place.address}</small></span><FeedbackControls value={existing?.response ?? null} onChange={(response) => saveManualFeedback(place, response)} busy={savingKey === `place-${place.id}`} includeNotVisited={false} /></div>;
+        })}</div>}
+        {notice && <p className="message neutral" role="status">{notice}</p>}
+      </section>
+      <div className="history-section-heading"><h2>함께 고른 식당</h2><p>참여한 선택마다 내 경험을 따로 남길 수 있어요.</p></div>
       {busy ? <div className="empty-state"><LoaderCircle className="spin" /><p>지난 선택을 불러오는 중이에요.</p></div>
         : error ? <p className="message error" role="alert">{error}</p>
         : decisions.length === 0 ? <div className="empty-state"><span><History size={30} /></span><h2>아직 지난 선택이 없어요</h2><p>오늘의 첫 식당을 골라보세요.</p></div>
@@ -301,7 +407,8 @@ function HistoryView() {
           <article className="history-item" key={decision.id}>
             <span className="history-icon"><Utensils size={23} /></span>
             <div className="history-copy"><p><Clock3 size={15} /> {new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeStyle: "short" }).format(new Date(decision.decidedAt))}</p><h2>{decision.place.name}</h2><span>{decision.place.category.split(">").slice(1).map((part) => part.trim()).join(" · ")}</span></div>
-            <div className="history-members"><Users size={17} /><span>{decision.participants.map((participant) => participant.displayName).join(", ")}</span></div>
+            <div className="history-members"><Users size={17} /><ParticipantNames participants={decision.participants} /></div>
+            <div className="history-feedback"><FeedbackControls value={decision.myFeedback ?? null} onChange={(response) => saveDecisionFeedback(decision.id, response)} busy={savingKey === `decision-${decision.id}`} /></div>
           </article>
         ))}</div>}
     </main>
@@ -310,9 +417,11 @@ function HistoryView() {
 
 function DecisionFlow({ user }: { user: AppUser }) {
   const [step, setStep] = useState<DecisionStep>("participants");
-  const [participants, setParticipants] = useState<AppUser[]>([user]);
+  const [participants, setParticipants] = useState<ParticipantSummary[]>([user]);
   const [duel, setDuel] = useState<DuelState | null>(null);
   const [result, setResult] = useState<PlaceCandidate | null>(null);
+  const [decisionId, setDecisionId] = useState<number | null>(null);
+  const [comparisons, setComparisons] = useState<DuelComparison[]>([]);
   const [locationLabel, setLocationLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -324,7 +433,7 @@ function DecisionFlow({ user }: { user: AppUser }) {
       if (data.candidates.length < 2) return setError("주변에 조건에 맞는 곳이 부족합니다. 다른 위치를 선택해 주세요.");
       const nextDuel = startDuel(shuffle(data.candidates));
       if (!nextDuel) return;
-      setLocationLabel(label); setDuel(nextDuel); setStep("duel");
+      setLocationLabel(label); setDuel(nextDuel); setComparisons([]); setStep("duel");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "후보를 만들지 못했습니다.");
     } finally { setBusy(false); }
@@ -332,20 +441,26 @@ function DecisionFlow({ user }: { user: AppUser }) {
 
   async function choose(place: PlaceCandidate) {
     if (!duel) return;
+    const loser = place.id === duel.winner.id ? duel.challenger : duel.winner;
+    const nextComparisons: DuelComparison[] = [...comparisons, {
+      round: duel.round,
+      winner: { id: place.id, category: place.category },
+      loser: { id: loser.id, category: loser.category },
+    }];
     const next = chooseDuel(duel, place);
-    if (next.state) return setDuel(next.state);
+    if (next.state) { setComparisons(nextComparisons); return setDuel(next.state); }
     if (!next.result) return;
     setBusy(true); setError("");
     try {
-      await requestApi("/api/decisions", { method: "POST", body: JSON.stringify({ participantIds: participants.map((participant) => participant.id), place: next.result }) });
-      setResult(next.result); setStep("result");
+      const data = await requestApi<{ decision: { id: number } }>("/api/decisions", { method: "POST", body: JSON.stringify({ participantIds: participants.map((participant) => participant.id), place: next.result, comparisons: nextComparisons }) });
+      setDecisionId(data.decision.id); setResult(next.result); setStep("result");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "결과를 저장하지 못했습니다.");
     } finally { setBusy(false); }
   }
 
   function restart() {
-    setParticipants([user]); setDuel(null); setResult(null); setLocationLabel(""); setError(""); setStep("participants");
+    setParticipants([user]); setDuel(null); setResult(null); setDecisionId(null); setComparisons([]); setLocationLabel(""); setError(""); setStep("participants");
   }
 
   return (
@@ -354,7 +469,7 @@ function DecisionFlow({ user }: { user: AppUser }) {
       {step === "participants" && <ParticipantsStep currentUser={user} participants={participants} setParticipants={setParticipants} onNext={() => { setError(""); setStep("location"); }} />}
       {step === "location" && <LocationStep onBack={() => setStep("participants")} onSelect={loadCandidates} busy={busy} error={error} />}
       {step === "duel" && duel && <DuelStep state={duel} onChoose={choose} busy={busy} error={error} />}
-      {step === "result" && result && <ResultStep place={result} participants={participants} locationLabel={locationLabel} onRestart={restart} />}
+      {step === "result" && result && decisionId !== null && <ResultStep place={result} participants={participants} locationLabel={locationLabel} decisionId={decisionId} onRestart={restart} />}
     </main>
   );
 }

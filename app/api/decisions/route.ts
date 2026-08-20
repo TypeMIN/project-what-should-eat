@@ -1,11 +1,12 @@
 import { apiError, readJson } from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import type { DecisionHistory, Gender, PlaceCandidate } from "@/lib/types";
+import type { DecisionHistory, DuelComparison, Gender, PlaceCandidate, PreferenceResponse } from "@/lib/types";
 
 type CreateDecisionBody = {
   participantIds?: number[];
   place?: PlaceCandidate;
+  comparisons?: DuelComparison[];
 };
 
 type DecisionRow = {
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
   const body = await readJson<CreateDecisionBody>(request);
   const participantIds = [...new Set((body?.participantIds ?? []).map(Number))];
   const place = body?.place;
+  const comparisons = body?.comparisons ?? [];
 
   if (!participantIds.includes(currentUser.id)) {
     return apiError("세션 진행자는 참가자에 포함되어야 합니다.");
@@ -50,6 +52,20 @@ export async function POST(request: Request) {
     !Number.isFinite(place.longitude)
   ) {
     return apiError("최종 식당 정보를 확인해 주세요.");
+  }
+  if (
+    comparisons.length > 20
+    || comparisons.some((comparison) => (
+      !Number.isSafeInteger(comparison.round)
+      || comparison.round < 1
+      || !comparison.winner?.id
+      || !comparison.winner.category
+      || !comparison.loser?.id
+      || !comparison.loser.category
+      || comparison.winner.id === comparison.loser.id
+    ))
+  ) {
+    return apiError("A/B 선택 기록을 확인해 주세요.");
   }
 
   const supabase = getSupabaseAdmin();
@@ -88,6 +104,24 @@ export async function POST(request: Request) {
     return apiError("참가자와 결과를 함께 저장하지 못했습니다.", 500);
   }
 
+  if (comparisons.length > 0) {
+    const { error: comparisonError } = await supabase.from("meal_comparisons").insert(
+      comparisons.map((comparison) => ({
+        decision_id: decision.id,
+        host_user_id: currentUser.id,
+        round: comparison.round,
+        winner_place_id: comparison.winner.id,
+        winner_category_name: comparison.winner.category,
+        loser_place_id: comparison.loser.id,
+        loser_category_name: comparison.loser.category,
+      })),
+    );
+    if (comparisonError) {
+      await supabase.from("meal_decisions").delete().eq("id", decision.id);
+      return apiError("A/B 선택 기록을 함께 저장하지 못했습니다.", 500);
+    }
+  }
+
   return Response.json(
     { decision: { id: Number(decision.id), decidedAt: decision.decided_at } },
     { status: 201 },
@@ -108,7 +142,11 @@ export async function GET() {
   const decisionIds = (ownRows ?? []).map((row) => Number(row.decision_id));
   if (decisionIds.length === 0) return Response.json({ decisions: [] });
 
-  const [{ data: decisions, error: decisionError }, { data: participantRows, error: rowError }] =
+  const [
+    { data: decisions, error: decisionError },
+    { data: participantRows, error: rowError },
+    { data: feedbackRows, error: feedbackError },
+  ] =
     await Promise.all([
       supabase
         .from("meal_decisions")
@@ -121,9 +159,16 @@ export async function GET() {
         .from("meal_decision_participants")
         .select("decision_id, user_id")
         .in("decision_id", decisionIds),
+      supabase
+        .from("place_feedback")
+        .select("decision_id, response")
+        .eq("user_id", currentUser.id)
+        .in("decision_id", decisionIds),
     ]);
 
-  if (decisionError || rowError) return apiError("결정 이력을 불러오지 못했습니다.", 500);
+  if (decisionError || rowError || feedbackError) {
+    return apiError("결정 이력을 불러오지 못했습니다.", 500);
+  }
 
   const userIds = [...new Set((participantRows ?? []).map((row) => Number(row.user_id)))];
   const { data: users, error: userError } = await supabase
@@ -142,6 +187,9 @@ export async function GET() {
     list.push({ id: Number(user.id), loginId: user.login_id, displayName: user.display_name });
     participantsByDecision.set(decisionId, list);
   }
+  const feedbackByDecision = new Map(
+    (feedbackRows ?? []).map((row) => [Number(row.decision_id), row.response as PreferenceResponse]),
+  );
 
   const history: DecisionHistory[] = (decisions as DecisionRow[]).map((decision) => ({
     id: Number(decision.id),
@@ -158,6 +206,7 @@ export async function GET() {
     },
     participants: participantsByDecision.get(Number(decision.id)) ?? [],
     decidedAt: decision.decided_at,
+    myFeedback: feedbackByDecision.get(Number(decision.id)) ?? null,
   }));
 
   return Response.json({ decisions: history });
